@@ -1,0 +1,925 @@
+{
+  "agent_id": "",
+  "channel": "voice",
+  "last_modification_timestamp": 1785331536819,
+  "agent_name": "Ana - Luma Bistro Reservations",
+  "response_engine": {
+    "type": "conversation-flow",
+    "version": 0,
+    "conversation_flow_id": "conversation_flow_097c7d509779"
+  },
+  "language": "en-US",
+  "data_storage_setting": "everything",
+  "opt_in_signed_url": false,
+  "version": 0,
+  "assigned_tags": [],
+  "is_published": false,
+  "post_call_analysis_model": "gpt-4.1",
+  "pii_config": {
+    "mode": "post_call",
+    "categories": []
+  },
+  "handbook_config": {
+    "default_personality": true,
+    "ai_disclosure": true
+  },
+  "timezone": "America/Los_Angeles",
+  "voice_id": "retell-Cimo",
+  "max_call_duration_ms": 3600000,
+  "interruption_sensitivity": 0.9,
+  "allow_user_dtmf": true,
+  "user_dtmf_options": {},
+  "conversationFlow": {
+    "conversation_flow_id": "conversation_flow_097c7d509779",
+    "version": 0,
+    "last_modification_timestamp": 1785344622504,
+    "global_prompt": "You are Ana, the reservations assistant for Luma Bistro, a dinner-only restaurant in Los Angeles. Luma Bistro is open Tuesday through Sunday, 5:00 PM to 10:00 PM, and closed Mondays. Seating times are 5:30, 6:00, 6:30, 7:00, 7:30, and 8:00 PM only. The largest party you can book directly is 8; parties of 9 or more need the events team.\n\n## Response Guidelines\n- Speak in one or two short sentences per turn. One question per turn.\n- Say times naturally (\"six thirty PM\"), never in 24-hour format.\n- Read phone numbers and confirmation codes back digit by digit.\n- Never state a time is available unless a tool call just confirmed it. Never invent or suggest a time yourself — only offer times a tool call actually returned.\n- Before creating, changing, or cancelling a reservation, read back the full details and get an explicit yes before making the write call.\n- If the caller interrupts you, stop talking immediately and treat what they say next as the correction.\n- If the caller corrects a detail they already gave (date, time, party size, name, or phone number), accept the new value, briefly confirm it, and continue without restarting the conversation.\n- If the caller says \"hold on\" or \"one moment,\" respond with NO_RESPONSE_NEEDED.\n- Current date and time: {{current_time_America/Los_Angeles}}. Today's date is {{current_date}}. Availability only exists for 2026-08-14, 2026-08-15, and 2026-08-16 -- when asking for or offering a date, offer only those three evenings rather than guessing or assuming any other date.\n\n## Guardrails\n- Never call the create-reservation tool more than once for the same booking.\n- Never say a reservation was created, changed, or cancelled unless the matching tool call actually succeeded. If a tool call returns HTTP 422 or 409, nothing was written or found -- explain the issue plainly and ask for corrected information or offer alternatives, and never claim success.\n- Always send dates to tools as YYYY-MM-DD, times as 24-hour HH:MM (six PM is 18:00), and phone numbers in E.164 format like +13105550199 -- a hyphenated number will silently match nothing.\n- Never collect or discuss payment information.",
+    "nodes": [
+      {
+        "name": "Greeting",
+        "edges": [
+          {
+            "destination_node_id": "collect_booking_info",
+            "id": "e_greet_create",
+            "transition_condition": {
+              "type": "prompt",
+              "prompt": "Caller wants to make a new reservation"
+            }
+          },
+          {
+            "destination_node_id": "find_reservation",
+            "id": "e_greet_existing",
+            "transition_condition": {
+              "type": "prompt",
+              "prompt": "Caller wants to modify or cancel an existing reservation"
+            }
+          }
+        ],
+        "id": "greeting",
+        "type": "conversation",
+        "display_position": {
+          "x": 199,
+          "y": 6
+        },
+        "instruction": {
+          "type": "prompt",
+          "text": "Greet the caller as Luma Bistro reservations. Ask whether they'd like to make a new reservation, or change or cancel an existing one."
+        }
+      },
+      {
+        "name": "Collect Booking Info",
+        "id": "collect_booking_info",
+        "type": "conversation",
+        "display_position": {
+          "x": 598,
+          "y": 6
+        },
+        "instruction": {
+          "type": "prompt",
+          "text": "Collect the date, seating time (must be one of 5:30, 6:00, 6:30, 7:00, 7:30, or 8:00 PM), party size (max 8), name, and phone number for the reservation. If the caller corrects any value before moving on, accept the correction."
+        },
+        "always_edge": {
+          "destination_node_id": "check_availability_fn",
+          "id": "e_cbi_always",
+          "transition_condition": {
+            "type": "prompt",
+            "prompt": "Always"
+          }
+        }
+      },
+      {
+        "name": "Confirm Booking",
+        "edges": [
+          {
+            "destination_node_id": "create_reservation_fn",
+            "id": "e_cb_confirm",
+            "transition_condition": {
+              "type": "prompt",
+              "prompt": "Caller confirms all details are correct"
+            }
+          },
+          {
+            "destination_node_id": "collect_booking_info",
+            "id": "e_cb_correct",
+            "transition_condition": {
+              "type": "prompt",
+              "prompt": "Caller wants to correct a detail"
+            }
+          }
+        ],
+        "id": "confirm_booking",
+        "type": "conversation",
+        "display_position": {
+          "x": 5469,
+          "y": 1638
+        },
+        "instruction": {
+          "type": "prompt",
+          "text": "Read back the full booking details -- date, time, party size, name, and phone number, reading the phone number digit by digit. Ask for explicit confirmation before booking. If the caller wants to correct anything, accept the correction."
+        }
+      },
+      {
+        "tool_id": "tool_create_reservation",
+        "name": "Create Reservation",
+        "edges": [
+          {
+            "destination_node_id": "read_confirmation",
+            "id": "e_cr_success",
+            "transition_condition": {
+              "type": "prompt",
+              "prompt": "The reservation was created successfully"
+            }
+          },
+          {
+            "destination_node_id": "create_reservation_retry_fn",
+            "id": "e_cr_fail",
+            "transition_condition": {
+              "type": "prompt",
+              "prompt": "The create reservation call failed"
+            }
+          }
+        ],
+        "id": "create_reservation_fn",
+        "type": "function",
+        "tool_type": "local",
+        "display_position": {
+          "x": 7398,
+          "y": 1638
+        },
+        "speak_during_execution": false,
+        "wait_for_result": true
+      },
+      {
+        "name": "Read Confirmation",
+        "id": "read_confirmation",
+        "type": "end",
+        "speak_during_execution": true,
+        "display_position": {
+          "x": 7803,
+          "y": 1718
+        },
+        "instruction": {
+          "type": "prompt",
+          "text": "Give the caller their confirmation code, reading it digit by digit, thank them, and end the call."
+        }
+      },
+      {
+        "name": "Find Reservation",
+        "id": "find_reservation",
+        "type": "conversation",
+        "display_position": {
+          "x": 894,
+          "y": 6232
+        },
+        "instruction": {
+          "type": "prompt",
+          "text": "Ask the caller for the phone number on the reservation or their confirmation code."
+        },
+        "always_edge": {
+          "destination_node_id": "search_reservation_fn",
+          "id": "e_fr_always",
+          "transition_condition": {
+            "type": "prompt",
+            "prompt": "Always"
+          }
+        }
+      },
+      {
+        "name": "Confirm Modify",
+        "edges": [
+          {
+            "destination_node_id": "modify_reservation_fn",
+            "id": "e_cm_confirm",
+            "transition_condition": {
+              "type": "prompt",
+              "prompt": "Caller confirms the updated details are correct"
+            }
+          },
+          {
+            "destination_node_id": "ask_modify_or_cancel",
+            "id": "e_cm_correct",
+            "transition_condition": {
+              "type": "prompt",
+              "prompt": "Caller wants to correct a detail"
+            }
+          }
+        ],
+        "id": "confirm_modify",
+        "type": "conversation",
+        "display_position": {
+          "x": 4468,
+          "y": 6
+        },
+        "instruction": {
+          "type": "prompt",
+          "text": "Read back the full updated reservation details and ask for explicit confirmation before saving the change. If the caller wants to correct anything, accept the correction."
+        }
+      },
+      {
+        "name": "Modify Success",
+        "id": "modify_success",
+        "type": "end",
+        "speak_during_execution": true,
+        "display_position": {
+          "x": 6390,
+          "y": -642
+        },
+        "instruction": {
+          "type": "prompt",
+          "text": "Confirm the changes were saved and end the call."
+        }
+      },
+      {
+        "name": "Confirm Cancel",
+        "edges": [
+          {
+            "destination_node_id": "cancel_reservation_fn",
+            "id": "e_cc_confirm",
+            "transition_condition": {
+              "type": "prompt",
+              "prompt": "Caller confirms they want to cancel"
+            }
+          },
+          {
+            "destination_node_id": "ask_modify_or_cancel",
+            "id": "e_cc_keep",
+            "transition_condition": {
+              "type": "prompt",
+              "prompt": "Caller decides to keep the reservation"
+            }
+          }
+        ],
+        "id": "confirm_cancel",
+        "type": "conversation",
+        "display_position": {
+          "x": 8109,
+          "y": 5847
+        },
+        "instruction": {
+          "type": "prompt",
+          "text": "Confirm the caller wants to cancel this specific reservation, reading back the date and time, and get an explicit yes before cancelling."
+        }
+      },
+      {
+        "tool_id": "tool_cancel_reservation",
+        "name": "Cancel Reservation",
+        "edges": [
+          {
+            "destination_node_id": "cancel_success",
+            "id": "e_can_success",
+            "transition_condition": {
+              "type": "prompt",
+              "prompt": "The cancellation succeeded"
+            }
+          },
+          {
+            "destination_node_id": "apology_end",
+            "id": "e_can_fail",
+            "transition_condition": {
+              "type": "prompt",
+              "prompt": "The cancellation call failed"
+            }
+          }
+        ],
+        "id": "cancel_reservation_fn",
+        "type": "function",
+        "tool_type": "local",
+        "display_position": {
+          "x": 8508,
+          "y": 5847
+        },
+        "speak_during_execution": false,
+        "wait_for_result": true
+      },
+      {
+        "name": "Cancel Success",
+        "id": "cancel_success",
+        "type": "end",
+        "speak_during_execution": true,
+        "display_position": {
+          "x": 8907,
+          "y": 5927
+        },
+        "instruction": {
+          "type": "prompt",
+          "text": "Confirm the reservation has been cancelled and end the call."
+        }
+      },
+      {
+        "tool_id": "tool_check_availability",
+        "name": "Check Availability",
+        "edges": [
+          {
+            "destination_node_id": "confirm_booking",
+            "id": "e_cav_create",
+            "transition_condition": {
+              "type": "prompt",
+              "prompt": "The requested time is available, and the caller is making a new booking"
+            }
+          },
+          {
+            "destination_node_id": "confirm_modify",
+            "id": "e_cav_modify",
+            "transition_condition": {
+              "type": "prompt",
+              "prompt": "The requested time is available, and the caller is modifying an existing reservation"
+            }
+          },
+          {
+            "destination_node_id": "offer_alternative",
+            "id": "e_cav_unavailable",
+            "transition_condition": {
+              "type": "prompt",
+              "prompt": "The call succeeded but the requested time is not available"
+            }
+          },
+          {
+            "destination_node_id": "check_availability_retry_fn",
+            "id": "e_cav_503",
+            "transition_condition": {
+              "type": "prompt",
+              "prompt": "The availability check failed due to a temporary service error (HTTP 503)"
+            }
+          }
+        ],
+        "id": "check_availability_fn",
+        "type": "function",
+        "tool_type": "local",
+        "display_position": {
+          "x": 1038,
+          "y": 30
+        },
+        "speak_during_execution": false,
+        "wait_for_result": true
+      },
+      {
+        "name": "Offer Alternative",
+        "edges": [
+          {
+            "destination_node_id": "confirm_booking",
+            "id": "e_alt_create",
+            "transition_condition": {
+              "type": "prompt",
+              "prompt": "Caller accepts the alternative time, and is making a new booking"
+            }
+          },
+          {
+            "destination_node_id": "confirm_modify",
+            "id": "e_alt_modify",
+            "transition_condition": {
+              "type": "prompt",
+              "prompt": "Caller accepts the alternative time, and is modifying an existing reservation"
+            }
+          },
+          {
+            "destination_node_id": "no_availability_end",
+            "id": "e_alt_decline",
+            "transition_condition": {
+              "type": "prompt",
+              "prompt": "Caller declines the alternative time"
+            }
+          }
+        ],
+        "id": "offer_alternative",
+        "type": "conversation",
+        "display_position": {
+          "x": 3534,
+          "y": 1638
+        },
+        "instruction": {
+          "type": "prompt",
+          "text": "Let the caller know the requested time isn't available, then offer the alternative time returned by the availability check for the same date and party size. Ask if that works."
+        }
+      },
+      {
+        "tool_id": "tool_create_reservation",
+        "name": "Retry Create Reservation",
+        "edges": [
+          {
+            "destination_node_id": "read_confirmation",
+            "id": "e_crr_success",
+            "transition_condition": {
+              "type": "prompt",
+              "prompt": "The reservation was created successfully"
+            }
+          },
+          {
+            "destination_node_id": "apology_end",
+            "id": "e_crr_fail",
+            "transition_condition": {
+              "type": "prompt",
+              "prompt": "The create reservation call failed again"
+            }
+          }
+        ],
+        "id": "create_reservation_retry_fn",
+        "type": "function",
+        "tool_type": "local",
+        "display_position": {
+          "x": 8262,
+          "y": 3159
+        },
+        "speak_during_execution": false,
+        "wait_for_result": true
+      },
+      {
+        "name": "Apology End",
+        "id": "apology_end",
+        "type": "end",
+        "speak_during_execution": true,
+        "display_position": {
+          "x": 7404,
+          "y": 6563
+        },
+        "instruction": {
+          "type": "prompt",
+          "text": "Apologize that the system is having trouble completing the request right now, let the caller know the team will follow up with them, and end the call."
+        }
+      },
+      {
+        "name": "No Availability End",
+        "id": "no_availability_end",
+        "type": "end",
+        "speak_during_execution": true,
+        "display_position": {
+          "x": 5622,
+          "y": 4520
+        },
+        "instruction": {
+          "type": "prompt",
+          "text": "Apologize that there's no matching time available today, invite the caller to call back another time, and end the call."
+        }
+      },
+      {
+        "tool_id": "tool_search_reservation",
+        "name": "Search Reservation",
+        "edges": [
+          {
+            "destination_node_id": "ask_modify_or_cancel",
+            "id": "e_sr_found",
+            "transition_condition": {
+              "type": "prompt",
+              "prompt": "A matching reservation was found"
+            }
+          },
+          {
+            "destination_node_id": "find_reservation_retry",
+            "id": "e_sr_notfound",
+            "transition_condition": {
+              "type": "prompt",
+              "prompt": "No matching reservation was found"
+            }
+          }
+        ],
+        "id": "search_reservation_fn",
+        "type": "function",
+        "tool_type": "local",
+        "display_position": {
+          "x": 1293,
+          "y": 6232
+        },
+        "speak_during_execution": false,
+        "wait_for_result": true
+      },
+      {
+        "name": "Find Reservation Retry",
+        "id": "find_reservation_retry",
+        "type": "conversation",
+        "display_position": {
+          "x": 3534,
+          "y": 6563
+        },
+        "instruction": {
+          "type": "prompt",
+          "text": "Let the caller know no reservation was found, and ask them to double-check and provide the phone number or confirmation code again."
+        },
+        "always_edge": {
+          "destination_node_id": "search_reservation_retry_fn",
+          "id": "e_frr_always",
+          "transition_condition": {
+            "type": "prompt",
+            "prompt": "Always"
+          }
+        }
+      },
+      {
+        "tool_id": "tool_search_reservation",
+        "name": "Search Reservation Retry",
+        "edges": [
+          {
+            "destination_node_id": "ask_modify_or_cancel",
+            "id": "e_srr_found",
+            "transition_condition": {
+              "type": "prompt",
+              "prompt": "A matching reservation was found"
+            }
+          },
+          {
+            "destination_node_id": "apology_end",
+            "id": "e_srr_notfound",
+            "transition_condition": {
+              "type": "prompt",
+              "prompt": "No matching reservation was found again"
+            }
+          }
+        ],
+        "id": "search_reservation_retry_fn",
+        "type": "function",
+        "tool_type": "local",
+        "display_position": {
+          "x": 5469,
+          "y": 6563
+        },
+        "speak_during_execution": false,
+        "wait_for_result": true
+      },
+      {
+        "name": "Ask Modify Or Cancel",
+        "edges": [
+          {
+            "destination_node_id": "check_availability_fn",
+            "id": "e_amc_change",
+            "transition_condition": {
+              "type": "prompt",
+              "prompt": "Caller wants to change the date, time, or party size"
+            }
+          },
+          {
+            "destination_node_id": "confirm_cancel",
+            "id": "e_amc_cancel",
+            "transition_condition": {
+              "type": "prompt",
+              "prompt": "Caller wants to cancel the reservation"
+            }
+          }
+        ],
+        "id": "ask_modify_or_cancel",
+        "type": "conversation",
+        "display_position": {
+          "x": 7710,
+          "y": 5847
+        },
+        "instruction": {
+          "type": "prompt",
+          "text": "Ask whether the caller wants to change the reservation's date, time, or party size, or cancel it entirely. If changing, collect the new date, time, and/or party size."
+        }
+      },
+      {
+        "tool_id": "tool_modify_reservation",
+        "name": "Modify Reservation",
+        "edges": [
+          {
+            "destination_node_id": "modify_success",
+            "id": "e_mr_success",
+            "transition_condition": {
+              "type": "prompt",
+              "prompt": "The reservation was updated successfully"
+            }
+          },
+          {
+            "destination_node_id": "apology_end",
+            "id": "e_mr_fail",
+            "transition_condition": {
+              "type": "prompt",
+              "prompt": "The update call failed"
+            }
+          }
+        ],
+        "id": "modify_reservation_fn",
+        "type": "function",
+        "tool_type": "local",
+        "display_position": {
+          "x": 6403,
+          "y": 6
+        },
+        "speak_during_execution": false,
+        "wait_for_result": true
+      },
+      {
+        "tool_id": "tool_check_availability",
+        "name": "Retry Check Availability",
+        "edges": [
+          {
+            "destination_node_id": "confirm_booking",
+            "id": "e_cavr_create",
+            "transition_condition": {
+              "type": "prompt",
+              "prompt": "The requested time is available, and the caller is making a new booking"
+            }
+          },
+          {
+            "destination_node_id": "confirm_modify",
+            "id": "e_cavr_modify",
+            "transition_condition": {
+              "type": "prompt",
+              "prompt": "The requested time is available, and the caller is modifying an existing reservation"
+            }
+          },
+          {
+            "destination_node_id": "offer_alternative",
+            "id": "e_cavr_unavailable",
+            "transition_condition": {
+              "type": "prompt",
+              "prompt": "The call succeeded but the requested time is not available"
+            }
+          },
+          {
+            "destination_node_id": "escalate_availability_fn",
+            "id": "e_cavr_503",
+            "transition_condition": {
+              "type": "prompt",
+              "prompt": "The availability check failed again due to a temporary service error (HTTP 503)"
+            }
+          }
+        ],
+        "id": "check_availability_retry_fn",
+        "type": "function",
+        "tool_type": "local",
+        "display_position": {
+          "x": 1542,
+          "y": 6
+        },
+        "speak_during_execution": false,
+        "wait_for_result": true
+      },
+      {
+        "tool_id": "tool_handoff",
+        "name": "Escalate Availability",
+        "edges": [
+          {
+            "destination_node_id": "apology_end",
+            "id": "e_esc_always",
+            "transition_condition": {
+              "type": "prompt",
+              "prompt": "Always"
+            }
+          }
+        ],
+        "id": "escalate_availability_fn",
+        "type": "function",
+        "tool_type": "local",
+        "display_position": {
+          "x": 2070,
+          "y": 6
+        },
+        "speak_during_execution": false,
+        "wait_for_result": true
+      }
+    ],
+    "components": [],
+    "start_node_id": "greeting",
+    "start_speaker": "agent",
+    "tools": [
+      {
+        "parameter_type": "json",
+        "execution_message_type": "static_text",
+        "method": "POST",
+        "description": "Check whether a table is available at Luma Bistro for a given date, time, and party size. Availability only exists for 2026-08-14, 2026-08-15, and 2026-08-16 -- any other date returns HTTP 422. Returns available (boolean) and, when not available, an alternatives list of open times for that same date and party size. May return HTTP 503 if the service is temporarily down.",
+        "type": "custom",
+        "url": "https://kernelly-nonprocurable-ettie.ngrok-free.dev/retell/availability",
+        "tool_id": "tool_check_availability",
+        "args_at_root": true,
+        "execution_message_description": "Let me check that for you.",
+        "speak_after_execution": true,
+        "name": "check_availability",
+        "response_variables": {
+          "availability_alternatives": "alternatives",
+          "availability_available": "available"
+        },
+        "speak_during_execution": true,
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "date": {
+              "type": "string",
+              "description": "Reservation date in YYYY-MM-DD format. Only 2026-08-14, 2026-08-15, or 2026-08-16 are valid."
+            },
+            "party_size": {
+              "type": "integer",
+              "description": "Number of guests, 1 to 8."
+            },
+            "time": {
+              "type": "string",
+              "description": "Requested seating time in 24-hour HH:MM format (e.g. 18:00 for six PM). Must be one of Luma Bistro's seating times: 17:30, 18:00, 18:30, 19:00, 19:30, 20:00."
+            }
+          },
+          "required": [
+            "date",
+            "time",
+            "party_size"
+          ]
+        }
+      },
+      {
+        "tool_id": "tool_create_reservation",
+        "parameter_type": "json",
+        "method": "POST",
+        "args_at_root": true,
+        "speak_after_execution": true,
+        "name": "create_reservation",
+        "description": "Create a new reservation at Luma Bistro. Only call this after the caller has explicitly confirmed the full booking details you read back to them, and only once per booking. Returns a reservation_id and confirmation_code on success. Returns HTTP 422 if the input is invalid, or HTTP 409 if the slot is no longer available -- in both cases nothing is booked.",
+        "response_variables": {
+          "new_confirmation_code": "confirmation_code",
+          "new_reservation_id": "reservation_id"
+        },
+        "type": "custom",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "description": "Name to put the reservation under."
+            },
+            "date": {
+              "type": "string",
+              "description": "Reservation date, YYYY-MM-DD."
+            },
+            "party_size": {
+              "type": "integer",
+              "description": "Number of guests, 1 to 8."
+            },
+            "time": {
+              "type": "string",
+              "description": "Reservation time, 24-hour HH:MM."
+            },
+            "notes": {
+              "type": "string",
+              "description": "Any special requests. Omit or leave empty if none."
+            },
+            "phone": {
+              "type": "string",
+              "description": "Contact phone number in E.164 format, e.g. +13105550199."
+            }
+          },
+          "required": [
+            "name",
+            "phone",
+            "date",
+            "time",
+            "party_size"
+          ]
+        },
+        "url": "https://kernelly-nonprocurable-ettie.ngrok-free.dev/retell/reservations"
+      },
+      {
+        "tool_id": "tool_modify_reservation",
+        "parameter_type": "json",
+        "method": "POST",
+        "args_at_root": true,
+        "speak_after_execution": true,
+        "name": "modify_reservation",
+        "description": "Update an existing Luma Bistro reservation, identified by its confirmation code. Include only the fields that are changing. Returns HTTP 422 for invalid input or HTTP 409 if the new slot is unavailable -- in both cases nothing is changed.",
+        "response_variables": {},
+        "type": "custom",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "date": {
+              "type": "string",
+              "description": "New date, YYYY-MM-DD, only if changing."
+            },
+            "notes": {
+              "type": "string",
+              "description": "New notes, only if changing."
+            },
+            "confirmation_code": {
+              "type": "string",
+              "description": "Confirmation code of the reservation to modify, in the form LUMA-XXXX."
+            },
+            "phone": {
+              "type": "string",
+              "description": "New phone number in E.164 format, only if changing."
+            },
+            "name": {
+              "type": "string",
+              "description": "New name, only if changing."
+            },
+            "party_size": {
+              "type": "integer",
+              "description": "New party size, 1 to 8, only if changing."
+            },
+            "time": {
+              "type": "string",
+              "description": "New time, 24-hour HH:MM, only if changing."
+            }
+          },
+          "required": [
+            "confirmation_code"
+          ]
+        },
+        "url": "https://kernelly-nonprocurable-ettie.ngrok-free.dev/retell/modify"
+      },
+      {
+        "tool_id": "tool_cancel_reservation",
+        "parameter_type": "json",
+        "method": "POST",
+        "args_at_root": true,
+        "speak_after_execution": true,
+        "name": "cancel_reservation",
+        "description": "Cancel an existing Luma Bistro reservation, identified by its confirmation code. Only call after the caller has explicitly confirmed they want to cancel.",
+        "response_variables": {},
+        "type": "custom",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "confirmation_code": {
+              "type": "string",
+              "description": "Confirmation code of the reservation to cancel, in the form LUMA-XXXX."
+            }
+          },
+          "required": [
+            "confirmation_code"
+          ]
+        },
+        "url": "https://kernelly-nonprocurable-ettie.ngrok-free.dev/retell/cancel"
+      },
+      {
+        "tool_id": "tool_search_reservation",
+        "parameter_type": "json",
+        "method": "POST",
+        "args_at_root": true,
+        "speak_after_execution": true,
+        "name": "search_reservation",
+        "description": "Look up an existing Luma Bistro reservation by phone number or confirmation code. Provide exactly one of phone or confirmation_code. Returns the matching reservation(s), including each one's name, phone, date, time, party_size, notes, and confirmation code.",
+        "response_variables": {
+          "reservation_notes": "reservations[0].notes",
+          "reservation_confirmation_code": "reservations[0].confirmation_code",
+          "reservation_date": "reservations[0].date",
+          "reservation_name": "reservations[0].name",
+          "reservation_party_size": "reservations[0].party_size",
+          "reservation_time": "reservations[0].time",
+          "reservation_phone": "reservations[0].phone"
+        },
+        "type": "custom",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "confirmation_code": {
+              "type": "string",
+              "description": "Confirmation code in the form LUMA-XXXX. Use this OR phone, not both."
+            },
+            "phone": {
+              "type": "string",
+              "description": "Caller's phone number in E.164 format, e.g. +13105550199. Use this OR confirmation_code, not both."
+            }
+          }
+        },
+        "url": "https://kernelly-nonprocurable-ettie.ngrok-free.dev/retell/search"
+      },
+      {
+        "tool_id": "tool_handoff",
+        "parameter_type": "json",
+        "method": "POST",
+        "args_at_root": true,
+        "speak_after_execution": true,
+        "name": "handoff",
+        "description": "Hand off to a human Luma Bistro team member when the availability check keeps failing after a retry. Include everything collected so far so the caller doesn't have to repeat themselves.",
+        "response_variables": {},
+        "type": "custom",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "customer_phone": {
+              "type": "string",
+              "description": "Best callback number for the caller, in E.164 format."
+            },
+            "reason": {
+              "type": "string",
+              "description": "Short reason for the handoff, e.g. 'availability service unavailable after retry'."
+            },
+            "conversation_summary": {
+              "type": "string",
+              "description": "Summary of everything discussed and collected so far in this call, so the human doesn't make the caller repeat themselves."
+            }
+          },
+          "required": [
+            "reason",
+            "customer_phone",
+            "conversation_summary"
+          ]
+        },
+        "url": "https://kernelly-nonprocurable-ettie.ngrok-free.dev/handoff"
+      }
+    ],
+    "model_choice": {
+      "type": "cascading",
+      "model": "gemini-3.0-flash",
+      "high_priority": false
+    },
+    "tool_call_strict_mode": true,
+    "default_dynamic_variables": {
+      "current_date": "2026-08-13"
+    },
+    "knowledge_base_ids": [],
+    "kb_config": {
+      "top_k": 3,
+      "filter_score": 0.6
+    },
+    "begin_tag_display_position": {
+      "x": 6,
+      "y": 15.2734375
+    },
+    "is_published": false,
+    "is_transfer_cf": false
+  }
+}
